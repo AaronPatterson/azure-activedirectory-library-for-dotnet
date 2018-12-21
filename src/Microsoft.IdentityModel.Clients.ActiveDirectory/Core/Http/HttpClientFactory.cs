@@ -40,13 +40,15 @@ namespace Microsoft.Identity.Core.Http
         // The HttpClient is a singleton per ClientApplication so that we don't have a process wide singleton.
         public const long MaxResponseContentBufferSizeInBytes = 1024*1024;
 
-        public HttpClientFactory()
+        public HttpClientFactory(HttpClient httpClient = null)
         {
-            var httpClient = new HttpClient(new HttpClientHandler() { UseDefaultCredentials = true })
+            if (httpClient == null)
             {
-                MaxResponseContentBufferSize = MaxResponseContentBufferSizeInBytes
-            };
+                // TODO: Will use default credentials matter to us?
+                httpClient = new HttpClient(new HttpClientHandler() { UseDefaultCredentials = true });
+            }
 
+            httpClient.MaxResponseContentBufferSize = MaxResponseContentBufferSizeInBytes;
             httpClient.DefaultRequestHeaders.Accept.Clear();
             httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
