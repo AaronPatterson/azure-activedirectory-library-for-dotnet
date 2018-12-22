@@ -44,13 +44,14 @@ namespace Microsoft.Identity.Core.Http
         {
             if (httpClient == null)
             {
-                // TODO: Will use default credentials matter to us?
-                httpClient = new HttpClient(new HttpClientHandler() { UseDefaultCredentials = true });
+                httpClient = new HttpClient(new HttpClientHandler() { UseDefaultCredentials = true })
+                {
+                    MaxResponseContentBufferSize = MaxResponseContentBufferSizeInBytes
+                };
+                
+                httpClient.DefaultRequestHeaders.Accept.Clear();
+                httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             }
-
-            httpClient.MaxResponseContentBufferSize = MaxResponseContentBufferSizeInBytes;
-            httpClient.DefaultRequestHeaders.Accept.Clear();
-            httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
             HttpClient = httpClient;
         }
