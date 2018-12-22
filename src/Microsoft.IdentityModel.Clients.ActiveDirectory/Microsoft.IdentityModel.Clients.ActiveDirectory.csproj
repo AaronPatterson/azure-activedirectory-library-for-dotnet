@@ -20,7 +20,7 @@
     <!-- This should be passed from the VSTS build -->
     <AdalClientSemVer Condition="'$(AdalClientSemVer)' == ''">1.0.0-localbuild</AdalClientSemVer>
     <!-- This will generate AssemblyVersion, AssemblyFileVersion and AssemblyInformationVersion -->
-    <Version>4.4.2-private</Version>
+    <Version>4.4.2.1-private</Version>
 
     <!-- Copyright needs to be in the form of © not (c) to be compliant -->
     <Title>Active Directory Authentication Library</Title>
