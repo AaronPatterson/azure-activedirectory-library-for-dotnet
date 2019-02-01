@@ -32,6 +32,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Identity.Core;
 using Microsoft.Identity.Core.Http;
@@ -62,33 +63,32 @@ namespace Microsoft.IdentityModel.Clients.ActiveDirectory.Internal.Http
 
         public async Task<IHttpWebResponse> GetResponseAsync()
         {
-            // TODO: UseDefaultCredentials is TRUE in MSAL but has always been FALSE in adal.  need to reconcile.
-            using (var client = new HttpClient(AdalHttpMessageHandlerFactory.GetMessageHandler(false)))
+            HttpClient client = HttpClientFactory.SharedHttpClient;
+
+            var requestMessage = new HttpRequestMessage
             {
-                client.MaxResponseContentBufferSize = _maxResponseSizeInBytes;
-                client.DefaultRequestHeaders.Accept.Clear();
-                var requestMessage = new HttpRequestMessage
-                {
-                    RequestUri = new Uri(uri)
-                };
-                requestMessage.Headers.Accept.Clear();
+                RequestUri = new Uri(uri)
+            };
+            requestMessage.Headers.Accept.Clear();
 
-                requestMessage.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(Accept ?? "application/json"));
-                foreach (KeyValuePair<string, string> kvp in Headers)
-                {
-                    requestMessage.Headers.Add(kvp.Key, kvp.Value);
-                }
+            requestMessage.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(Accept ?? "application/json"));
+            foreach (KeyValuePair<string, string> kvp in Headers)
+            {
+                requestMessage.Headers.Add(kvp.Key, kvp.Value);
+            }
 
-                bool addCorrelationId = RequestContext != null && RequestContext.Logger.CorrelationId != Guid.Empty;
-                if (addCorrelationId)
-                {
-                    requestMessage.Headers.Add(OAuthHeader.CorrelationId, RequestContext.Logger.CorrelationId.ToString());
-                    requestMessage.Headers.Add(OAuthHeader.RequestCorrelationIdInResponse, "true");
-                }
+            bool addCorrelationId = RequestContext != null && RequestContext.Logger.CorrelationId != Guid.Empty;
+            if (addCorrelationId)
+            {
+                requestMessage.Headers.Add(OAuthHeader.CorrelationId, RequestContext.Logger.CorrelationId.ToString());
+                requestMessage.Headers.Add(OAuthHeader.RequestCorrelationIdInResponse, "true");
+            }
 
-                client.Timeout = TimeSpan.FromMilliseconds(TimeoutInMilliSeconds);
-
-                HttpResponseMessage responseMessage;
+            HttpResponseMessage responseMessage;
+            using (var source = new CancellationTokenSource())
+            {
+                // Enforce request timeout without modifying the http client as it can not be changed once requests have been made with it.
+                source.CancelAfter(TimeSpan.FromMilliseconds(TimeoutInMilliSeconds));
 
                 try
                 {
@@ -112,35 +112,35 @@ namespace Microsoft.IdentityModel.Clients.ActiveDirectory.Internal.Http
                         requestMessage.Method = HttpMethod.Get;
                     }
 
-                    responseMessage = await client.SendAsync(requestMessage).ConfigureAwait(false);
+                    responseMessage = await client.SendAsync(requestMessage, source.Token).ConfigureAwait(false);
                 }
                 catch (TaskCanceledException ex)
                 {
                     throw new HttpRequestWrapperException(null, ex);
                 }
-
-                var webResponse = await CreateResponseAsync(responseMessage).ConfigureAwait(false);
-
-                if (!responseMessage.IsSuccessStatusCode)
-                {
-                    throw new HttpRequestWrapperException(
-                        webResponse,
-                        new HttpRequestException(
-                            string.Format(
-                                CultureInfo.CurrentCulture,
-                                "Response status code does not indicate success: {0} ({1}).",
-                                (int)webResponse.StatusCode,
-                                webResponse.StatusCode),
-                            new AdalException(webResponse.Body)));
-                }
-
-                if (addCorrelationId)
-                {
-                    VerifyCorrelationIdHeaderInReponse(webResponse.Headers);
-                }
-
-                return webResponse;
             }
+
+            var webResponse = await CreateResponseAsync(responseMessage).ConfigureAwait(false);
+
+            if (!responseMessage.IsSuccessStatusCode)
+            {
+                throw new HttpRequestWrapperException(
+                    webResponse,
+                    new HttpRequestException(
+                        string.Format(
+                            CultureInfo.CurrentCulture,
+                            "Response status code does not indicate success: {0} ({1}).",
+                            (int)webResponse.StatusCode,
+                            webResponse.StatusCode),
+                        new AdalException(webResponse.Body)));
+            }
+
+            if (addCorrelationId)
+            {
+                VerifyCorrelationIdHeaderInReponse(webResponse.Headers);
+            }
+
+            return webResponse;
         }
 
         public static async Task<IHttpWebResponse> CreateResponseAsync(HttpResponseMessage response)
