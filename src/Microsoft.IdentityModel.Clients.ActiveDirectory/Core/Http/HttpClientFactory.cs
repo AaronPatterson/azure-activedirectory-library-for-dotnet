@@ -54,8 +54,12 @@ namespace Microsoft.Identity.Core.Http
             }
 
             HttpClient = httpClient;
+            SharedHttpClient = httpClient;
         }
 
         public HttpClient HttpClient { get; }
+
+        // TODO: This is a hack to avoid passing things around everhwhere.
+        public static HttpClient SharedHttpClient { get; private set; }
     }
 }
